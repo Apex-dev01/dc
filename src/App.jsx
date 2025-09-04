@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-// FIX: The build environment is unable to find the installed '@supabase/supabase-js' package.
-// To fix this, we will use a direct, version-locked URL from a CDN.
-// This is the most reliable way to ensure the library is found during the build process.
+// We are keeping the direct CDN import as it resolves the build-time issues.
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 import { LogOut, Send, Hash, MessageSquare, Check, Mail, AlertTriangle } from 'lucide-react';
 
@@ -47,17 +45,20 @@ export default function App() {
     return <MissingKeysError />;
   }
 
-  // FIX 2: This is a more robust way to handle authentication.
-  // The onAuthStateChange listener fires immediately with the current session
-  // or null, so we don't need the separate getSession() call.
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChanged((_event, session) => {
+    // FIX: This is the most robust way to handle authentication.
+    // The onAuthStateChange listener fires immediately with the current session
+    // (or null), so we don't need a separate getSession() call. This also ensures
+    // the function is called correctly, which should resolve the previous runtime error.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setLoading(false); // We are done loading as soon as we get the first auth event.
     });
 
     // Cleanup the subscription when the component unmounts.
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
   if (loading) {
