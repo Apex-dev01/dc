@@ -1,24 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-// FIX: The build environment could not find the '@supabase/supabase-js' package.
-// Reverting to a stable, versioned CDN link to ensure the library can be found.
+// FIX: The build environment is unable to find the installed '@supabase/supabase-js' package.
+// To fix this, we will use a direct, version-locked URL from a CDN.
+// This is the most reliable way to ensure the library is found during the build process.
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 import { LogOut, Send, Hash, MessageSquare, Check, Mail, AlertTriangle } from 'lucide-react';
 
 // --- SUPABASE SETUP ---
-// This code now reads from Vercel's environment variables.
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-
-// This check is a safeguard. If the variables are missing, it will show an error screen.
-if (!supabaseUrl || !supabaseAnonKey) {
-  // This will be caught by the App component and will render the error message.
-  // We're throwing a generic error here to be handled gracefully below.
-  // Note: We avoid creating the client here to prevent further errors.
-}
-
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// We will only create the client if the keys exist.
+const supabase = (supabaseUrl && supabaseAnonKey) ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 // --- HELPER COMPONENT FOR ERRORS ---
 function MissingKeysError() {
@@ -28,15 +20,15 @@ function MissingKeysError() {
         <AlertTriangle className="mx-auto h-16 w-16 text-red-500 mb-4" />
         <h1 className="text-3xl font-bold text-white mb-3">Configuration Error</h1>
         <p className="text-gray-300 mb-6">
-          Your Supabase URL or Key is missing. The application cannot connect to the database, which is why you are seeing this message instead of a blank page.
+          Your Supabase URL or Key is missing. The application cannot connect to the database.
         </p>
         <div className="text-left bg-gray-900/50 p-4 rounded-lg">
             <h2 className="text-lg font-semibold text-white mb-2">How to Fix This:</h2>
             <ol className="list-decimal list-inside text-gray-300 space-y-2">
                 <li>Go to your project settings on the <span className="font-bold text-blue-400">Vercel Dashboard</span>.</li>
                 <li>Navigate to the <span className="font-bold text-blue-400">Environment Variables</span> section.</li>
-                <li>Ensure you have two variables named <code className="bg-gray-700 p-1 rounded">VITE_SUPABASE_URL</code> and <code className="bg-gray-700 p-1 rounded">VITE_SUPABASE_ANON_KEY</code> with the correct values from your Supabase project.</li>
-                <li><span className="font-bold text-white">Redeploy</span> your project from the Vercel dashboard to apply the changes.</li>
+                <li>Ensure you have two variables named <code className="bg-gray-700 p-1 rounded">VITE_SUPABASE_URL</code> and <code className="bg-gray-700 p-1 rounded">VITE_SUPABASE_ANON_KEY</code>.</li>
+                <li><span className="font-bold text-white">Redeploy</span> your project to apply the changes.</li>
             </ol>
         </div>
       </div>
@@ -50,26 +42,21 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Check if the keys are missing before doing anything else.
-  if (!supabaseUrl || !supabaseAnonKey) {
+  // Check if the Supabase client failed to initialize.
+  if (!supabase) {
     return <MissingKeysError />;
   }
 
+  // FIX 2: This is a more robust way to handle authentication.
+  // The onAuthStateChange listener fires immediately with the current session
+  // or null, so we don't need the separate getSession() call.
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    // This is the correct way to use the auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChanged((_event, session) => {
       setSession(session);
-      if (_event === 'SIGNED_IN') {
-        setLoading(false);
-      }
+      setLoading(false); // We are done loading as soon as we get the first auth event.
     });
 
-    // Cleanup the subscription when the component unmounts
+    // Cleanup the subscription when the component unmounts.
     return () => subscription.unsubscribe();
   }, []);
 
@@ -91,7 +78,7 @@ export default function App() {
 
 
 // --- AUTHENTICATION COMPONENT ---
-// This component remains the same as before.
+// This component remains the same.
 function AuthComponent() {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
@@ -172,7 +159,7 @@ function AuthComponent() {
 
 
 // --- MAIN CHAT LAYOUT ---
-// This component remains the same as before.
+// This component remains the same.
 function ChatLayout({ session }) {
     const [channels, setChannels] = useState([]);
     const [activeChannel, setActiveChannel] = useState(null);
@@ -219,14 +206,14 @@ function ChatLayout({ session }) {
     useEffect(() => {
         if (!activeChannel) return;
 
-        const subscription = supabase.channel(`public:messages:channel_id=eq.${activeChannel.id}`)
+        const realtimeChannel = supabase.channel(`public:messages:channel_id=eq.${activeChannel.id}`)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `channel_id=eq.${activeChannel.id}` }, payload => {
                 setMessages(currentMessages => [...currentMessages, payload.new]);
             })
             .subscribe();
 
         return () => {
-            supabase.removeChannel(subscription);
+            supabase.removeChannel(realtimeChannel);
         };
     }, [activeChannel]);
     
@@ -315,7 +302,6 @@ function ChatLayout({ session }) {
                              </div>
                              <div>
                                <p className="font-semibold text-blue-400 text-sm">
-                                    {/* In a real app, you'd fetch user profiles to show names */}
                                     {session.user.id === msg.user_id ? "You" : `User ${msg.user_id.substring(0,6)}`}
                                     <span className="text-gray-400 font-normal text-xs ml-2">{new Date(msg.created_at).toLocaleTimeString()}</span>
                                </p>
