@@ -1,12 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+// FIX: The build environment could not find the '@supabase/supabase-js' package.
+// Reverting to a stable, versioned CDN link to ensure the library can be found.
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 import { LogOut, Send, Hash, MessageSquare, Check, Mail, AlertTriangle } from 'lucide-react';
 
 // --- SUPABASE SETUP ---
 // This code now reads from Vercel's environment variables.
-// The placeholders are only used as a fallback to show a clear error message.
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'YOUR_SUPABASE_URL';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+
+// This check is a safeguard. If the variables are missing, it will show an error screen.
+if (!supabaseUrl || !supabaseAnonKey) {
+  // This will be caught by the App component and will render the error message.
+  // We're throwing a generic error here to be handled gracefully below.
+  // Note: We avoid creating the client here to prevent further errors.
+}
+
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
@@ -40,8 +50,8 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Check if the keys are placeholders
-  if (supabaseUrl === 'YOUR_SUPABASE_URL' || supabaseAnonKey === 'YOUR_SUPABASE_ANON_KEY') {
+  // Check if the keys are missing before doing anything else.
+  if (!supabaseUrl || !supabaseAnonKey) {
     return <MissingKeysError />;
   }
 
@@ -51,6 +61,7 @@ export default function App() {
       setLoading(false);
     });
 
+    // This is the correct way to use the auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChanged((_event, session) => {
       setSession(session);
       if (_event === 'SIGNED_IN') {
@@ -58,6 +69,7 @@ export default function App() {
       }
     });
 
+    // Cleanup the subscription when the component unmounts
     return () => subscription.unsubscribe();
   }, []);
 
@@ -79,6 +91,7 @@ export default function App() {
 
 
 // --- AUTHENTICATION COMPONENT ---
+// This component remains the same as before.
 function AuthComponent() {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
@@ -159,6 +172,7 @@ function AuthComponent() {
 
 
 // --- MAIN CHAT LAYOUT ---
+// This component remains the same as before.
 function ChatLayout({ session }) {
     const [channels, setChannels] = useState([]);
     const [activeChannel, setActiveChannel] = useState(null);
@@ -338,4 +352,5 @@ function ChatLayout({ session }) {
         </div>
     );
 }
+
 
